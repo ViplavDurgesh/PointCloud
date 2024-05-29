@@ -31,7 +31,7 @@ Part 2: Stereo Calibration
 
 4. Performing Stereo Calibration:
    - The code performs stereo calibration using the collected object points and image points.
-   - `cv2.stereoCalibrate` is called twice to compute the stereo calibration parameters between camera pairs (camera 1 & 2 and camera 2 & 3).
+   - `cv2.stereoCalibrate` is called twice to compute the stereo calibration parameters between camera pairs (camera 1 & 2 and camera 1 & 3).
    - Calibration parameters include rotation matrices, translation vectors, essential matrices, and fundamental matrices, which are saved in a `.npz` file.
    - The results are printed to the console.
 
