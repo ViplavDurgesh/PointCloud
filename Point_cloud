@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Load color and depth images
-color_raw = o3d.io.read_image('Dataset/Prad/Happy/cam1/color/5.png')
-depth_raw = o3d.io.read_image('Dataset/Prad/Happy/cam1/depth/5.png')
+color_raw = o3d.io.read_image('color_image directory')
+depth_raw = o3d.io.read_image('Depth_image directory')
 
 # Create RGBD image from color and depth images
 rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_raw, depth_raw,convert_rgb_to_intensity=False)
