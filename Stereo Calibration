@@ -1,1 +1,178 @@
 
+import pyrealsense2 as rs
+import cv2
+import numpy as np
+
+# Load the calibration data for each camera
+calibration_data_cam1 = np.load('camera1_calibration.npz')  # Adjust filenames accordingly
+calibration_data_cam2 = np.load('camera2_calibration.npz')
+calibration_data_cam3 = np.load('camera3_calibration.npz')
+
+# Get the camera matrices and distortion coefficients for each camera
+camera_matrix_cam1 = calibration_data_cam1['mtx']
+dist_coeffs_cam1 = calibration_data_cam1['dist']
+camera_matrix_cam2 = calibration_data_cam2['mtx']
+dist_coeffs_cam2 = calibration_data_cam2['dist']
+camera_matrix_cam3 = calibration_data_cam3['mtx']
+dist_coeffs_cam3 = calibration_data_cam3['dist']
+
+# Define the size of the chessboard pattern (number of inner corners)
+pattern_size = (7, 6)  # Adjust the size according to your calibration pattern
+
+# Define the size of the calibration grid (in arbitrary units)
+square_size = 1.0  # This is just an example, adjust according to your calibration target
+
+# Create an array to store the 3D points of the calibration pattern
+objp = np.zeros((np.prod(pattern_size), 3), dtype=np.float32)
+objp[:, :2] = np.indices(pattern_size).T.reshape(-1, 2)
+objp *= square_size  # Scale the 3D points by the square size
+
+# Initialize arrays to store the object points and image points for each camera
+objpoints = []  # 3D points in real-world coordinates
+imgpoints_cam1 = []  # 2D points in image coordinates for camera 1
+imgpoints_cam2 = []  # 2D points in image coordinates for camera 2
+imgpoints_cam3 = []  # 2D points in image coordinates for camera 3
+
+# Configure color streams for RealSense D435i
+pipeline1 = rs.pipeline()
+config1 = rs.config()
+config1.enable_device('136622073300')  # Replace with the serial number of your first camera
+config1.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+pipeline2 = rs.pipeline()
+config2 = rs.config()
+config2.enable_device('138422074931')  # Replace with the serial number of your second camera
+config2.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+pipeline3 = rs.pipeline()
+config3 = rs.config()
+config3.enable_device('141722070246')  # Replace with the serial number of your third camera
+config3.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+# Start streaming
+pipeline1.start(config1)
+pipeline2.start(config2)
+pipeline3.start(config3)
+
+# Capture images for stereo calibration
+num_images = 50  # Number of images to capture
+image_count = 0
+
+while image_count < num_images:
+    # Wait for frames from all cameras
+    frames1 = pipeline1.wait_for_frames()
+    frames2 = pipeline2.wait_for_frames()
+    frames3 = pipeline3.wait_for_frames()
+    
+    # Get color frames from each camera
+    frame_cam1 = frames1.get_color_frame()
+    frame_cam2 = frames2.get_color_frame()
+    frame_cam3 = frames3.get_color_frame()
+
+    # Convert frames to numpy arrays
+    frame_cam1 = np.asanyarray(frame_cam1.get_data())
+    frame_cam2 = np.asanyarray(frame_cam2.get_data())
+    frame_cam3 = np.asanyarray(frame_cam3.get_data())
+
+    # Convert frames to grayscale
+    gray_cam1 = cv2.cvtColor(frame_cam1, cv2.COLOR_BGR2GRAY)
+    gray_cam2 = cv2.cvtColor(frame_cam2, cv2.COLOR_BGR2GRAY)
+    gray_cam3 = cv2.cvtColor(frame_cam3, cv2.COLOR_BGR2GRAY)
+
+    # Find the chessboard corners in each camera's frame
+    ret_corners_cam1, corners_cam1 = cv2.findChessboardCorners(gray_cam1, pattern_size, None)
+    ret_corners_cam2, corners_cam2 = cv2.findChessboardCorners(gray_cam2, pattern_size, None)
+    ret_corners_cam3, corners_cam3 = cv2.findChessboardCorners(gray_cam3, pattern_size, None)
+
+    # If corners are found in all three cameras, add them to the calibration data
+    if ret_corners_cam1 and ret_corners_cam2 and ret_corners_cam3:
+        # Refine the corner locations
+        corners_refined_cam1 = cv2.cornerSubPix(gray_cam1, corners_cam1, (11, 11), (-1, -1),
+                                                 (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
+        corners_refined_cam2 = cv2.cornerSubPix(gray_cam2, corners_cam2, (11, 11), (-1, -1),
+                                                 (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
+        corners_refined_cam3 = cv2.cornerSubPix(gray_cam3, corners_cam3, (11, 11), (-1, -1),
+                                                 (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
+
+        # Draw and display the corners on the images (optional)
+        frame_with_corners_cam1 = cv2.drawChessboardCorners(frame_cam1, pattern_size, corners_refined_cam1,
+                                                             ret_corners_cam1)
+        frame_with_corners_cam2 = cv2.drawChessboardCorners(frame_cam2, pattern_size, corners_refined_cam2,
+                                                             ret_corners_cam2)
+        frame_with_corners_cam3 = cv2.drawChessboardCorners(frame_cam3, pattern_size, corners_refined_cam3,
+                                                             ret_corners_cam3)
+        cv2.imshow('Stereo Calibration Cam 1', frame_with_corners_cam1)
+        cv2.imshow('Stereo Calibration Cam 2', frame_with_corners_cam2)
+        cv2.imshow('Stereo Calibration Cam 3', frame_with_corners_cam3)
+
+        # Add object points and image points for each camera
+        objpoints.append(objp)
+        imgpoints_cam1.append(corners_refined_cam1)
+        imgpoints_cam2.append(corners_refined_cam2)
+        imgpoints_cam3.append(corners_refined_cam3)
+
+        image_count += 1
+
+    # Display the frames from each camera
+    cv2.imshow('Stereo Calibration Cam 1', frame_cam1)
+    cv2.imshow('Stereo Calibration Cam 2', frame_cam2)
+    cv2.imshow('Stereo Calibration Cam 3', frame_cam3)
+
+    # Wait for a key press to move to the next frame
+    if cv2.waitKey(100) & 0xFF == ord('q'):
+        break
+
+# Release the cameras and close all OpenCV windows
+pipeline1.stop()
+pipeline2.stop()
+pipeline3.stop()
+cv2.destroyAllWindows()
+
+if len(objpoints) > 0:
+    # Perform stereo calibration
+    ret, camera_matrix_cam1, dist_coeffs_cam1, camera_matrix_cam2, dist_coeffs_cam2, \
+    R12, T12, E12, F12 = cv2.stereoCalibrate(objpoints, imgpoints_cam1, imgpoints_cam2,
+                                      camera_matrix_cam1, dist_coeffs_cam1,
+                                      camera_matrix_cam2, dist_coeffs_cam2,
+                                      gray_cam1.shape[::-1], flags=cv2.CALIB_FIX_INTRINSIC)
+    
+    ret, camera_matrix_cam2, dist_coeffs_cam2, camera_matrix_cam3, dist_coeffs_cam3, \
+    R13, T13, E13, F13 = cv2.stereoCalibrate(objpoints, imgpoints_cam1, imgpoints_cam3,
+                                      camera_matrix_cam1, dist_coeffs_cam1,
+                                      camera_matrix_cam3, dist_coeffs_cam3,
+                                      gray_cam2.shape[::-1], flags=cv2.CALIB_FIX_INTRINSIC)
+    
+    
+    # Save the stereo calibration parameters (optional)
+    np.savez('stereo_calibration.npz', ret1=ret, camera_matrix_cam1=camera_matrix_cam1, dist_coeffs_cam1=dist_coeffs_cam1,
+             camera_matrix_cam2=camera_matrix_cam2, dist_coeffs_cam2=dist_coeffs_cam2, 
+             camera_matrix_cam3=camera_matrix_cam3, dist_coeffs_cam3=dist_coeffs_cam3, 
+             R12=R12, T12=T12, E12=E12, F12=F12,
+             R23=R13, T23=T13, E23=E13, F23=F13
+             )
+
+    print("Stereo calibration complete. Parameters saved.")
+
+    # Print the stereo calibration parameters
+    print("Stereo calibration results:")
+    print(" - Ret : ", ret)
+    print(" - Camera Matrix Cam 1:\n", camera_matrix_cam1)
+    print(" - Distortion Coefficients Cam 1:\n", dist_coeffs_cam1)
+    print(" - Camera Matrix Cam 2:\n", camera_matrix_cam2)
+    print(" - Distortion Coefficients Cam 2:\n", dist_coeffs_cam2)
+    print(" - Camera Matrix Cam 3:\n", camera_matrix_cam3)
+    print(" - Distortion Coefficients Cam 3:\n", dist_coeffs_cam3)
+    print(" - Rotation Matrix 12:\n", R12)
+    print(" - Translation Vector 12:\n", T12)
+    print(" - Essential Matrix 12:\n", E12)
+    print(" - Fundamental Matrix 12:\n", F12)
+    print(" - Rotation Matrix 13:\n", R13)
+    print(" - Translation Vector 13:\n", T13)
+    print(" - Essential Matrix 13:\n", E13)
+    print(" - Fundamental Matrix 13:\n", F13)
+  
+
+else:
+    print("No valid stereo calibration images captured.")
+
+
