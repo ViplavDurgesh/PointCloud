@@ -11,8 +11,8 @@ import numpy as np
 
 # Load color and depth images
 
-color_raw = o3d.io.read_image('Dataset/Prad/Happy/cam1/color/5.png')
-depth_raw = o3d.io.read_image('Dataset/Prad/Happy/cam1/depth/5.png')
+color_raw = o3d.io.read_image('Color_input_image')
+depth_raw = o3d.io.read_image('Depth_input_image')
 
 # Create RGBD image from color and depth images
 
